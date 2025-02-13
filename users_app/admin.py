@@ -27,11 +27,11 @@ class VolunteerItemInline(admin.TabularInline):
 
     def has_add_permission(self, request, obj=None):
         """Запрещает добавлять нарекания, если доброволец уволен"""
-        return obj and obj.status == 'dismissed' if obj else False
+        return obj and obj.status == 'active' if obj else False
 
     def has_change_permission(self, request, obj=None):
         """Запрещает редактирование нареканий у уволенных"""
-        return obj and obj.status == 'dismissed' if obj else False
+        return obj and obj.status == 'active' if obj else False
 
 
 @admin.register(User)
