@@ -8,6 +8,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django_jsonform.models.fields import JSONField
+from django.db import transaction
 
 
 # Create your models here.
@@ -19,6 +20,7 @@ class Volunteer(models.Model):
     STATUS_CHOICES = [
         ('active', 'Активен'),
         ('dismissed', 'Уволен'),
+        ('reserve', 'Резерв'),
     ]
     number_service = models.IntegerField(verbose_name="Номер табельный")
 
@@ -55,6 +57,9 @@ class Volunteer(models.Model):
     class Meta:
         verbose_name = "Доброволец"
         verbose_name_plural = "Добровольцы"
+        permissions = [
+            ("can_manage_reserve", "Может управлять резервистами"),
+        ]
 
     def __str__(self):
         return f"{self.last_name} {self.first_name} ({self.number_service})"
@@ -220,3 +225,62 @@ class Report(models.Model):
         return self.__str__()
 
     name.fget.short_description = 'Название'
+
+
+class ActivityReport(models.Model):
+    """Отчет активности добровольцев"""
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания отчета")
+    report_date = models.DateField(verbose_name="Дата активности")
+    file = models.FileField(upload_to="activity_reports/", verbose_name="Файл отчета")
+
+    class Meta:
+        verbose_name = "Отчет активности"
+        verbose_name_plural = "Отчеты активности"
+
+    def __str__(self):
+        return f"Отчет активности ({self.report_date.strftime('%Y-%m-%d')})"
+
+    def clean(self):
+        """Валидация: файл и дата обязательны"""
+        if not self.file:
+            raise ValidationError({"file": _("Необходимо загрузить файл отчета.")})
+        if not self.report_date:
+            raise ValidationError({"report_date": _("Необходимо указать дату активности.")})
+
+    def process_report(self):
+        """Обработка загруженного файла и увольнение отсутствующих добровольцев"""
+        with transaction.atomic():
+            wb = openpyxl.load_workbook(self.file)
+            ws = wb.active
+
+            # Поиск столбца с табельными номерами
+            header_row = [str(cell).strip().lower() for cell in
+                          next(ws.iter_rows(min_row=1, max_row=1, values_only=True))]
+            tn_keywords = {"тн", "табельный номер"}
+            tn_col_index = None
+
+            for idx, header in enumerate(header_row):
+                if any(keyword in header for keyword in tn_keywords):
+                    tn_col_index = idx
+                    break
+
+            if tn_col_index is None:
+                raise ValueError("Не найден столбец с табельными номерами")
+
+            report_tn = set()
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                tn = row[tn_col_index]
+                if isinstance(tn, int):
+                    report_tn.add(tn)
+
+            active_volunteers = Volunteer.objects.filter(status='active')
+            for volunteer in active_volunteers:
+                if volunteer.number_service not in report_tn:
+                    volunteer.status = 'dismissed'
+                    volunteer.dismissal_date = self.report_date
+                    volunteer.dismissal_order_number = f"Автоувольнение {self.report_date}"
+                    volunteer.save()
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.process_report()

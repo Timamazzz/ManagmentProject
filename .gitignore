@@ -25,7 +25,11 @@ db.sqlite3
 !**/migrations/__init__.py
 
 # Static and media files
-static/
+!**/static/
+static/*
+!**/static/44edbc66-c9a2-4ba3-80cc-f9cd91dcb804.jpg
+!**/static/ece98517-18ee-4c56-8492-de285f98205a.jpg
+
 media/
 *.bak
 *.swp
