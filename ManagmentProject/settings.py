@@ -21,7 +21,7 @@ LIBRARIES = (
 )
 
 INSTALLED_APPS = [
-    'jazzmin',
+    # 'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -121,18 +121,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = "users_app.User"
 
 # Jazzmin
-JAZZMIN_SETTINGS = {
-    "site_title": "Система учета",
-    "site_header": "Барс",
-    "site_footer": "Барс",
-    "site_brand": "Барс",
-    "copyright": "Барс",
-    "site_logo": "ece98517-18ee-4c56-8492-de285f98205a.jpg",
-    "login_logo": "44edbc66-c9a2-4ba3-80cc-f9cd91dcb804.jpg",
-    "login_logo_dark": "44edbc66-c9a2-4ba3-80cc-f9cd91dcb804.jpg",
-    "show_sidebar": True,
-    "hide_apps": ["auth"],
-    "hide_models": ["admin.LogEntry"],
-    "navigation_expanded": True,
-}
+# JAZZMIN_SETTINGS = {
+#     "site_title": "Система учета",
+#     "site_header": "Барс",
+#     "site_footer": "Барс",
+#     "site_brand": "Барс",
+#     "copyright": "Барс",
+#     "site_logo": "ece98517-18ee-4c56-8492-de285f98205a.jpg",
+#     "login_logo": "44edbc66-c9a2-4ba3-80cc-f9cd91dcb804.jpg",
+#     "login_logo_dark": "44edbc66-c9a2-4ba3-80cc-f9cd91dcb804.jpg",
+#     "show_sidebar": True,
+#     "hide_apps": ["auth"],
+#     "hide_models": ["admin.LogEntry"],
+#     "navigation_expanded": True,
+# }
 
