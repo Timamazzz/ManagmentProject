@@ -65,7 +65,7 @@ class VolunteerAdmin(admin.ModelAdmin):
         "kpp",
     )
     list_filter = ("status", "contract_date", "enrollment_date", "dismissal_date")
-    search_fields = ("last_name", "first_name", "number_service", "passport_number")
+    search_fields = ("last_name", "first_name", "patronymic", "number_service")
     inlines = (RemarkInline, VolunteerItemInline)
     fieldsets = default_fieldsets
 
