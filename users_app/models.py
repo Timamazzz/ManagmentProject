@@ -39,11 +39,14 @@ class Volunteer(models.Model):
     order_number = models.CharField(max_length=50, verbose_name="Номер приказа")
     enrollment_date = models.DateField(verbose_name="Дата зачисления в добровольческое формирование")
 
-    salary_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Размер денежной выплаты", default=0.00)
+    salary_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Размер денежной выплаты",
+                                        default=0.00)
 
     bic = models.CharField(max_length=9, verbose_name="БИК", null=True, blank=True)
-    bank_name = models.CharField(max_length=255, verbose_name="Наименование кредитной организации", null=True, blank=True)
-    correspondent_account = models.CharField(max_length=20, verbose_name="Корреспондентский счет", null=True, blank=True)
+    bank_name = models.CharField(max_length=255, verbose_name="Наименование кредитной организации", null=True,
+                                 blank=True)
+    correspondent_account = models.CharField(max_length=20, verbose_name="Корреспондентский счет", null=True,
+                                             blank=True)
     checking_account = models.CharField(max_length=20, verbose_name="Расчетный счет", null=True, blank=True)
     inn = models.CharField(max_length=12, verbose_name="ИНН", null=True, blank=True)
     kpp = models.CharField(max_length=9, verbose_name="КПП", null=True, blank=True)
@@ -179,22 +182,38 @@ class Report(models.Model):
         """Фильтрация добровольцев для отчета"""
         start_date = self.get_start_date()
         end_date = self.get_end_date()
-        return Volunteer.objects.filter(
-            enrollment_date__lte=end_date
-        ).exclude(
-            dismissal_date__lt=start_date
-        ).exclude(
-            remarks__date__range=(start_date, end_date)
-        )
+
+        # Исключаем уволенных до начала периода
+        queryset = Volunteer.objects.exclude(dismissal_date__isnull=False, dismissal_date__lte=start_date)
+        print(f"👥 Волонтеров после исключения уволенных до {start_date}: {queryset.count()}")
+
+        # Оставляем только тех, кто зачислен до конца периода
+        queryset = queryset.filter(enrollment_date__lte=end_date)
+        print(f"👥 Волонтеров после фильтрации по enrollment_date__lte={end_date}: {queryset.count()}")
+
+        # Исключаем волонтеров, у которых есть замечания в этот период
+        queryset = queryset.exclude(remarks__date__range=(start_date, end_date))
+        print(f"👥 Волонтеров после исключения по замечаниям в диапазоне ({start_date}, {end_date}): {queryset.count()}")
+
+        return queryset
 
     def get_worked_days(self, volunteer):
         """Вычисление количества отработанных дней"""
         start_date = self.get_start_date()
         end_date = self.get_end_date()
 
-        if volunteer.dismissal_date and start_date <= volunteer.dismissal_date <= end_date:
-            return (volunteer.dismissal_date - start_date).days
-        return (end_date - start_date).days + 1
+        active_start = max(start_date, volunteer.enrollment_date)
+        active_end = min(end_date, volunteer.dismissal_date) if volunteer.dismissal_date else end_date
+
+        worked_days = (active_end - active_start).days + 1 if active_start <= active_end else 0
+
+        print(f"👤 Волонтер {volunteer.number_service}")
+        print(f"📅 Период отчета: {start_date} - {end_date}")
+        print(f"📅 Дата зачисления: {volunteer.enrollment_date}")
+        print(f"📅 Дата увольнения: {volunteer.dismissal_date or '❌ не уволен'}")
+        print(f"📆 Отработанные дни: {worked_days}")
+
+        return worked_days
 
     def generate_report(self):
         """Создание Excel-файла отчета"""

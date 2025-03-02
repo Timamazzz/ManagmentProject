@@ -89,7 +89,7 @@ class VolunteerAdmin(admin.ModelAdmin):
         if obj.status == 'dismissed':
             fieldsets = [fs for fs in fieldsets if 'performance_report' not in fs[1].get('fields', [])]
 
-        if request.user.has_perm("users_app.can_manage_reserve"):
+        if request.user.has_perm("users_app.can_manage_reserve") and not request.user.is_superuser:
             return reserve_fieldsets
 
         return tuple(fieldsets)
