@@ -1,6 +1,6 @@
 default_fieldsets = (
     (None, {
-        'fields': ('number_service',)
+        'fields': ('number_service', 'rank')
     }),
     ('Личные данные', {
         'fields': ('first_name', 'last_name', 'patronymic', 'birthday'),
@@ -22,7 +22,7 @@ default_fieldsets = (
 
 reserve_fieldsets = (
     (None, {
-        'fields': ('number_service', 'status')
+        'fields': ('number_service', 'status', 'rank')
     }),
     ('Личные данные', {
         'fields': ('first_name', 'last_name', 'patronymic', 'birthday'),
@@ -41,7 +41,7 @@ reserve_fieldsets = (
 
 create_fieldsets = (
     (None, {
-        'fields': ('number_service',)
+        'fields': ('number_service', 'rank')
     }),
     ('Личные данные', {
         'fields': ('first_name', 'last_name', 'patronymic', 'birthday'),
@@ -55,4 +55,17 @@ create_fieldsets = (
     ('Банковские реквизиты', {
         'fields': ('salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
     }),
+)
+
+activity_report_create_fieldsets = (
+    (None, {'fields': ('report_date', 'file')}),
+)
+
+activity_report_detail_fieldsets = (
+    (None, {'fields': ('report_date', 'file', 'status')}),
+)
+
+activity_report_failed_detail_fieldsets = (
+    (None, {'fields': ('report_date', 'file', 'status')}),
+    ('Ошибка', {'fields': ('error_details',)}),
 )

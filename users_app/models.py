@@ -1,5 +1,5 @@
 from calendar import monthrange
-from datetime import date
+from datetime import date, datetime
 
 import openpyxl
 from django.contrib.auth.models import AbstractUser
@@ -52,6 +52,7 @@ class Volunteer(models.Model):
     dismissal_order_number = models.CharField(max_length=50, blank=True, null=True,
                                               verbose_name="Номер приказа об увольнении")
 
+    rank = models.CharField(max_length=1024, verbose_name="Звание", blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active', verbose_name="Статус")
 
     class Meta:
@@ -179,11 +180,21 @@ class Report(models.Model):
         start_date = self.get_start_date()
         end_date = self.get_end_date()
         return Volunteer.objects.filter(
-            enrollment_date__lte=end_date,
-            dismissal_date__isnull=True
+            enrollment_date__lte=end_date
+        ).exclude(
+            dismissal_date__lt=start_date
         ).exclude(
             remarks__date__range=(start_date, end_date)
         )
+
+    def get_worked_days(self, volunteer):
+        """Вычисление количества отработанных дней"""
+        start_date = self.get_start_date()
+        end_date = self.get_end_date()
+
+        if volunteer.dismissal_date and start_date <= volunteer.dismissal_date <= end_date:
+            return (volunteer.dismissal_date - start_date).days
+        return (end_date - start_date).days + 1
 
     def generate_report(self):
         """Создание Excel-файла отчета"""
@@ -195,7 +206,8 @@ class Report(models.Model):
             "id", "№ табельный", "Статус", "Фамилия", "Имя", "Отчество",
             "Дата рождения", "Серия паспорта", "Номер паспорта", "Кем выдан паспорт",
             "Дата выдачи паспорта", "Дата контракта", "№ приказа", "Дата зачисления",
-            "Размер денежной выплаты", "БИК", "Банк", "Корр. счет", "Расчетный счет", "ИНН", "КПП"
+            "Размер денежной выплаты", "БИК", "Банк", "Корр. счет", "Расчетный счет", "ИНН", "КПП",
+            "Кол-во отработанных дней"
         ]
         ws.append(headers)
 
@@ -206,7 +218,8 @@ class Report(models.Model):
                 volunteer.birthday, volunteer.passport_series, volunteer.passport_number, volunteer.passport_issued,
                 volunteer.passport_issue_date, volunteer.contract_date, volunteer.order_number,
                 volunteer.enrollment_date, volunteer.salary_amount, volunteer.bic, volunteer.bank_name,
-                volunteer.correspondent_account, volunteer.checking_account, volunteer.inn, volunteer.kpp
+                volunteer.correspondent_account, volunteer.checking_account, volunteer.inn, volunteer.kpp,
+                self.get_worked_days(volunteer)
             ]
             ws.append(row)
 
@@ -229,9 +242,17 @@ class Report(models.Model):
 
 class ActivityReport(models.Model):
     """Отчет активности добровольцев"""
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает обработки'),
+        ('processing', 'В обработке'),
+        ('completed', 'Завершено'),
+        ('failed', 'Ошибка')
+    ]
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания отчета")
     report_date = models.DateField(verbose_name="Дата активности")
     file = models.FileField(upload_to="activity_reports/", verbose_name="Файл отчета")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус отчета")
+    error_details = models.TextField(verbose_name="Детали ошибки", blank=True, null=True)  # Новое поле
 
     class Meta:
         verbose_name = "Отчет активности"
@@ -248,39 +269,183 @@ class ActivityReport(models.Model):
             raise ValidationError({"report_date": _("Необходимо указать дату активности.")})
 
     def process_report(self):
-        """Обработка загруженного файла и увольнение отсутствующих добровольцев"""
-        with transaction.atomic():
-            wb = openpyxl.load_workbook(self.file)
-            ws = wb.active
+        print(f"\n--- Начало обработки отчета от {self.report_date} ---")
+        self.error_details = ""  # Сбрасываем предыдущие ошибки
+        try:
+            with transaction.atomic():
+                # Загрузка файла
+                print("[1/5] Загрузка файла Excel...")
+                wb = openpyxl.load_workbook(self.file, data_only=True)
+                ws = wb.active
 
-            # Поиск столбца с табельными номерами
-            header_row = [str(cell).strip().lower() for cell in
-                          next(ws.iter_rows(min_row=1, max_row=1, values_only=True))]
-            tn_keywords = {"тн", "табельный номер"}
-            tn_col_index = None
+                # Поиск столбца с табельными номерами
+                print("[2/5] Поиск столбца с табельными номерами...")
+                header_row = [str(cell.value).strip().lower() for cell in ws[1]]
+                tn_col_index = next(
+                    (idx for idx, h in enumerate(header_row)
+                     if any(kw in h for kw in {"табельный номер", "тн"})),
+                    None
+                )
 
-            for idx, header in enumerate(header_row):
-                if any(keyword in header for keyword in tn_keywords):
-                    tn_col_index = idx
-                    break
+                if tn_col_index is None:
+                    self.error_details = "❌ Столбец с табельными номерами не найден!"
+                    self.status = 'failed'
+                    self.save(update_fields=['status', 'error_details'])
+                    raise ValueError(self.error_details)
 
-            if tn_col_index is None:
-                raise ValueError("Не найден столбец с табельными номерами")
+                print(f"✔️ Табельные номера в столбце {chr(65 + tn_col_index)}")
 
-            report_tn = set()
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                tn = row[tn_col_index]
-                if isinstance(tn, int):
-                    report_tn.add(tn)
+                # Сбор данных из файла
+                print("[3/5] Чтение данных из файла...")
+                report_tn = set()
+                invalid_tn = []
+                for row_num, row in enumerate(ws.iter_rows(min_row=7, values_only=True), start=7):
+                    tn = str(row[tn_col_index]).strip()
+                    if tn.isdigit():
+                        report_tn.add(int(tn))
+                    else:
+                        invalid_tn.append(f"Строка {row_num}: {tn}")
 
-            active_volunteers = Volunteer.objects.filter(status='active')
-            for volunteer in active_volunteers:
-                if volunteer.number_service not in report_tn:
-                    volunteer.status = 'dismissed'
-                    volunteer.dismissal_date = self.report_date
-                    volunteer.dismissal_order_number = f"Автоувольнение {self.report_date}"
-                    volunteer.save()
+                if invalid_tn:
+                    self.error_details = "❌ Некорректные табельные номера:\n" + "\n".join(invalid_tn)
+                    self.status = 'failed'
+                    self.save(update_fields=['status', 'error_details'])
+                    raise ValueError(self.error_details)
+
+                print(f"Найдено табельных номеров в отчете: {len(report_tn)}")
+
+                # Увольнение отсутствующих волонтеров
+                print("[4/5] Проверка активных волонтеров...")
+                active_volunteers = Volunteer.objects.filter(status='active')
+                dismissed = []
+
+                for volunteer in active_volunteers:
+                    if volunteer.number_service not in report_tn:
+                        volunteer.status = 'dismissed'
+                        volunteer.dismissal_date = self.report_date
+                        volunteer.dismissal_order_number = f"Автоувольнение {self.report_date}"
+                        dismissed.append(volunteer)
+
+                if dismissed:
+                    Volunteer.objects.bulk_update(dismissed, ['status', 'dismissal_date', 'dismissal_order_number'])
+                    print(f"🚫 Уволено волонтеров: {len(dismissed)}")
+                else:
+                    print("🤷 Нет волонтеров для увольнения")
+
+                # Добавление новых волонтеров
+                print("[5/5] Обработка новых волонтеров...")
+                existing_numbers = set(Volunteer.objects.values_list('number_service', flat=True))
+                new_numbers = report_tn - existing_numbers
+
+                new_volunteers = []
+                errors = []
+                if new_numbers:
+                    for row_num, row in enumerate(ws.iter_rows(min_row=7, values_only=True), start=7):
+                        tn = str(row[tn_col_index]).strip()
+                        if tn.isdigit() and int(tn) in new_numbers:
+                            try:
+                                print(f"\n--- Строка {row_num} ---")
+                                print(f"ТН: {tn}")
+                                print(f"Фамилия (row[10]): {row[10]}")
+                                print(f"Имя (row[11]): {row[11]}")
+                                print(f"Отчество (row[12]): {row[12]}")
+                                print(f"Дата рождения (row[14]): {row[14]}")
+                                print(f"Паспорт (серия: row[36]={row[36]}, номер: row[37]={row[37]})")
+                                print(f"Кем выдан (row[39]): {row[39]}")
+                                print(f"Дата выдачи паспорта (row[38]): {row[38]}")
+                                print(f"Дата договора (row[82]): {row[82]}")
+                                print(f"Номер приказа (row[81]): {row[81]}")
+                                print(f"Дата зачисления (row[84]): {row[84]}")
+                                print(f"БИК (row[52]): {row[52]}")
+                                print(f"ИНН (row[48]): {row[48]}")
+                                print(f"Расчетный счет (row[53]): {row[53]}")
+                                print(f"Звание (row[6]): {row[6]}")
+
+                                # Парсинг дат с обработкой ошибок
+                                def parse_date(date_str, field_name):
+                                    if not date_str:
+                                        return None
+                                    if isinstance(date_str, datetime):  # Если уже datetime, преобразуем в дату
+                                        return date_str.date()
+                                    if isinstance(date_str, date):  # Если уже date, возвращаем как есть
+                                        return date_str
+                                    try:
+                                        return datetime.strptime(date_str, "%d.%m.%Y").date()
+                                    except ValueError:
+                                        errors.append(
+                                            f"Строка {row_num}: Некорректный формат {field_name} ('{date_str}')")
+                                        return None
+
+                                birthday = parse_date(row[14], "даты рождения")
+                                passport_issue_date = parse_date(row[38], "даты выдачи паспорта")
+                                contract_date = parse_date(row[82], "даты договора")
+                                enrollment_date = parse_date(row[84], "даты зачисления")
+
+                                # Проверяем наличие критических ошибок
+                                if errors and len(errors) >= 5:  # Пример ограничения
+                                    raise ValueError("Слишком много ошибок в данных")
+
+                                new_volunteers.append(Volunteer(
+                                    number_service=int(tn),
+                                    last_name=row[10],
+                                    first_name=row[11],
+                                    patronymic=row[12],
+                                    birthday=birthday,
+                                    passport_series=row[36],
+                                    passport_number=row[37],
+                                    passport_issued=row[39],
+                                    passport_issue_date=passport_issue_date,
+                                    contract_date=contract_date,
+                                    order_number=row[81],
+                                    enrollment_date=enrollment_date,
+                                    bic=row[52],
+                                    inn=row[48],
+                                    checking_account=row[53],
+                                    rank=row[6],
+                                    status='active',
+                                    salary_amount=0.00
+                                ))
+                            except Exception as e:
+                                errors.append(f"Строка {row_num}: {str(e)}")
+                                continue
+
+                    if errors:
+                        self.error_details = "❌ Ошибки при создании волонтеров:\n" + "\n".join(errors)
+                        self.status = 'failed'
+                        self.save(update_fields=['status', 'error_details'])
+                        raise ValueError(self.error_details)
+
+                    if new_volunteers:
+                        Volunteer.objects.bulk_create(new_volunteers)
+                        print(f"✅ Добавлено новых волонтеров: {len(new_volunteers)}")
+                    else:
+                        self.error_details = "⚠️ Найдены новые номера, но не удалось создать записи"
+                        self.status = 'failed'
+                        self.save(update_fields=['status', 'error_details'])
+                        raise ValueError(self.error_details)
+                else:
+                    print("🤷 Нет новых волонтеров для добавления")
+
+                # Если все успешно
+                self.status = 'completed'
+                self.error_details = ""
+
+        except Exception as e:
+            print(f"🔥 Критическая ошибка: {str(e)}")
+            self.status = 'failed'
+            if not self.error_details:  # Если ошибка не была записана ранее
+                self.error_details = str(e)
+        finally:
+            # Сохраняем статус и ошибки в отдельной транзакции
+            try:
+                with transaction.atomic():
+                    self.save(update_fields=['status', 'error_details'])
+            except Exception as e:
+                print(f"Ошибка при сохранении статуса: {e}")
+
+        print("--- Обработка отчета завершена ---\n")
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        self.process_report()
+        if self.status == 'pending':  # Запускаем обработку только при создании
+            self.process_report()

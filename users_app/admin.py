@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from users_app.fieldsets import default_fieldsets, create_fieldsets, reserve_fieldsets
+from users_app.fieldsets import default_fieldsets, create_fieldsets, reserve_fieldsets, \
+    activity_report_create_fieldsets, activity_report_failed_detail_fieldsets, activity_report_detail_fieldsets
 from users_app.forms import ReportForm
 from users_app.models import User, Volunteer, Remark, VolunteerItem, Item, Report, ActivityReport
 from users_app.utils import export_to_excel, export_volunteers_and_items_to_excel
@@ -166,9 +167,20 @@ class ReportAdmin(admin.ModelAdmin):
 
 @admin.register(ActivityReport)
 class ActivityReportAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'report_date', 'file')
-    readonly_fields = ('created_at',)
+    list_display = ('created_at', 'report_date', 'file', 'status')
+    readonly_fields = ('created_at', 'status', 'error_details')
     ordering = ('-created_at',)
+    fieldsets = activity_report_detail_fieldsets
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = list(super().get_fieldsets(request, obj))
+        if not obj:
+            return activity_report_create_fieldsets
+
+        if obj.status == 'failed':
+            fieldsets = activity_report_failed_detail_fieldsets
+
+        return tuple(fieldsets)
