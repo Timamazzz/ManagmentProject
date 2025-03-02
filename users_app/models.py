@@ -41,12 +41,12 @@ class Volunteer(models.Model):
 
     salary_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Размер денежной выплаты", default=0.00)
 
-    bic = models.CharField(max_length=9, verbose_name="БИК", default="")
-    bank_name = models.CharField(max_length=255, verbose_name="Наименование кредитной организации", default="")
-    correspondent_account = models.CharField(max_length=20, verbose_name="Корреспондентский счет", default="")
-    checking_account = models.CharField(max_length=20, verbose_name="Расчетный счет", default="")
-    inn = models.CharField(max_length=12, verbose_name="ИНН", default="")
-    kpp = models.CharField(max_length=9, verbose_name="КПП", default="")
+    bic = models.CharField(max_length=9, verbose_name="БИК", null=True, blank=True)
+    bank_name = models.CharField(max_length=255, verbose_name="Наименование кредитной организации", null=True, blank=True)
+    correspondent_account = models.CharField(max_length=20, verbose_name="Корреспондентский счет", null=True, blank=True)
+    checking_account = models.CharField(max_length=20, verbose_name="Расчетный счет", null=True, blank=True)
+    inn = models.CharField(max_length=12, verbose_name="ИНН", null=True, blank=True)
+    kpp = models.CharField(max_length=9, verbose_name="КПП", null=True, blank=True)
 
     dismissal_date = models.DateField(blank=True, null=True, verbose_name="Дата увольнения")
     dismissal_order_number = models.CharField(max_length=50, blank=True, null=True,
