@@ -439,11 +439,6 @@ class ActivityReport(models.Model):
                     if new_volunteers:
                         Volunteer.objects.bulk_create(new_volunteers)
                         print(f"✅ Добавлено новых волонтеров: {len(new_volunteers)}")
-                    else:
-                        self.error_details = "⚠️ Найдены новые номера, но не удалось создать записи"
-                        self.status = 'failed'
-                        self.save(update_fields=['status', 'error_details'])
-                        raise ValueError(self.error_details)
                 else:
                     print("🤷 Нет новых волонтеров для добавления")
 
