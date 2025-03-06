@@ -320,10 +320,10 @@ class ActivityReport(models.Model):
                 invalid_tn = []
                 for row_num, row in enumerate(ws.iter_rows(min_row=7, values_only=True), start=7):
                     tn = str(row[tn_col_index]).strip()
-                    if tn.isdigit():
-                        report_tn.add(int(tn))
-                    else:
-                        invalid_tn.append(f"Строка {row_num}: {tn}")
+                    if not tn:
+                        continue
+
+                    report_tn.add(int(tn))
 
                 if invalid_tn:
                     self.error_details = "❌ Некорректные табельные номера:\n" + "\n".join(invalid_tn)
