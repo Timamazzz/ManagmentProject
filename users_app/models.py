@@ -302,7 +302,7 @@ class ActivityReport(models.Model):
                 header_row = [str(cell.value).strip().lower() for cell in ws[1]]
                 tn_col_index = next(
                     (idx for idx, h in enumerate(header_row)
-                     if any(kw in h for kw in {"табельный номер", "тн"})),
+                     if any(kw in h for kw in {"Личный номер", "личный номер"})),
                     None
                 )
 
