@@ -323,7 +323,7 @@ class ActivityReport(models.Model):
                     if not tn:
                         continue
 
-                    report_tn.add(int(tn))
+                    report_tn.add(tn)
 
                 if invalid_tn:
                     self.error_details = "❌ Некорректные табельные номера:\n" + "\n".join(invalid_tn)
