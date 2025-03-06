@@ -360,7 +360,9 @@ class ActivityReport(models.Model):
                 errors = []
                 if new_numbers:
                     for row_num, row in enumerate(ws.iter_rows(min_row=7, values_only=True), start=7):
-                        tn = str(row[tn_col_index]).strip()
+                        tn = row[tn_col_index]
+                        if tn is None or str(tn).strip() == "":  # Проверяем None и пустую строку
+                            continue
                         if tn in new_numbers:
                             try:
                                 print(f"\n--- Строка {row_num} ---")
