@@ -362,7 +362,7 @@ class ActivityReport(models.Model):
                                 print(f"Дата выдачи паспорта (row[38]): {row[38]}")
                                 print(f"Дата договора (row[82]): {row[82]}")
                                 print(f"Номер приказа (row[81]): {row[81]}")
-                                print(f"Дата зачисления (row[84]): {row[84]}")
+                                print(f"Дата зачисления (row[85]): {row[85]}")
                                 print(f"БИК (row[52]): {row[52]}")
                                 print(f"ИНН (row[48]): {row[48]}")
                                 print(f"Расчетный счет (row[53]): {row[53]}")
@@ -386,7 +386,7 @@ class ActivityReport(models.Model):
                                 birthday = parse_date(row[14], "даты рождения")
                                 passport_issue_date = parse_date(row[38], "даты выдачи паспорта")
                                 contract_date = parse_date(row[82], "даты договора")
-                                enrollment_date = parse_date(row[84], "даты зачисления")
+                                enrollment_date = parse_date(row[85], "даты зачисления")
 
                                 # Проверяем наличие критических ошибок
                                 if errors and len(errors) >= 5:  # Пример ограничения
