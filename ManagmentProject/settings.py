@@ -120,6 +120,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = "users_app.User"
 
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
 # Jazzmin
 # JAZZMIN_SETTINGS = {
 #     "site_title": "Система учета",
