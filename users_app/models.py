@@ -361,7 +361,7 @@ class ActivityReport(models.Model):
                 if new_numbers:
                     for row_num, row in enumerate(ws.iter_rows(min_row=7, values_only=True), start=7):
                         tn = str(row[tn_col_index]).strip()
-                        if tn.isdigit() and int(tn) in new_numbers:
+                        if tn in new_numbers:
                             try:
                                 print(f"\n--- Строка {row_num} ---")
                                 print(f"ТН: {tn}")
