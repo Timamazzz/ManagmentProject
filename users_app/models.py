@@ -154,34 +154,20 @@ class Report(models.Model):
     """Отчет за период"""
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания отчета")
     file = models.FileField(upload_to="reports/", blank=True, null=True, verbose_name="Файл отчета")
-    year = models.IntegerField(verbose_name="Год", default=date.today().year)
-    month = models.IntegerField(verbose_name="Месяц", choices=[(i, month) for i, month in enumerate([
-        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
-    ], start=1)], default=date.today().month)
+    start_date = models.DateField(verbose_name="Дата начала периода", null=True)
+    end_date = models.DateField(verbose_name="Дата конца периода", null=True)
 
     class Meta:
         verbose_name = "Отчет"
         verbose_name_plural = "Отчеты"
 
     def __str__(self):
-        start_date = self.get_start_date()
-        end_date = self.get_end_date()
-        return f"Отчет с {start_date} по {end_date}"
-
-    def get_start_date(self):
-        """Получение начала месяца"""
-        return date(self.year, self.month, 1)
-
-    def get_end_date(self):
-        """Получение конца месяца"""
-        last_day = monthrange(self.year, self.month)[1]
-        return date(self.year, self.month, last_day)
+        return f"Отчет с {self.start_date} по {self.end_date}"
 
     def get_volunteers_for_report(self):
         """Фильтрация добровольцев для отчета"""
-        start_date = self.get_start_date()
-        end_date = self.get_end_date()
+        start_date = self.start_date
+        end_date = self.end_date
 
         # Исключаем уволенных до начала периода
         queryset = Volunteer.objects.exclude(dismissal_date__isnull=False, dismissal_date__lte=start_date)
@@ -199,8 +185,8 @@ class Report(models.Model):
 
     def get_worked_days(self, volunteer):
         """Вычисление количества отработанных дней"""
-        start_date = self.get_start_date()
-        end_date = self.get_end_date()
+        start_date = self.start_date
+        end_date = self.end_date
 
         active_start = max(start_date, volunteer.enrollment_date)
         active_end = min(end_date, volunteer.dismissal_date) if volunteer.dismissal_date else end_date
@@ -245,7 +231,7 @@ class Report(models.Model):
         file_stream = ContentFile(b"")
         wb.save(file_stream)
         file_stream.seek(0)
-        filename = f"report_{self.year}_{self.month}.xlsx"
+        filename = f"report_{self.start_date}_{self.end_date}.xlsx"
         self.file.save(filename, file_stream, save=False)
 
     def save(self, *args, **kwargs):
