@@ -22,7 +22,7 @@ class Volunteer(models.Model):
         ('dismissed', 'Уволен'),
         ('reserve', 'Резерв'),
     ]
-    number_service = models.IntegerField(verbose_name="Номер табельный")
+    number_service = models.CharField(max_length=256, verbose_name="Номер табельный")
 
     first_name = models.CharField(max_length=30, verbose_name="Имя")
     last_name = models.CharField(max_length=30, verbose_name="Фамилия")
@@ -405,7 +405,7 @@ class ActivityReport(models.Model):
                                     raise ValueError("Слишком много ошибок в данных")
 
                                 new_volunteers.append(Volunteer(
-                                    number_service=int(tn),
+                                    number_service=tn,
                                     last_name=row[10],
                                     first_name=row[11],
                                     patronymic=row[12],

@@ -20,6 +20,10 @@ from django.urls import path
 
 from ManagmentProject import settings
 
+admin.site.site_header = "ИС Барс"
+admin.site.site_title = "ИС Барс"
+admin.site.index_title = "ИС Барс"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 ]
