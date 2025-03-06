@@ -24,23 +24,23 @@ class Volunteer(models.Model):
     ]
     number_service = models.CharField(max_length=256, verbose_name="Номер табельный")
 
-    first_name = models.CharField(max_length=30, verbose_name="Имя")
-    last_name = models.CharField(max_length=30, verbose_name="Фамилия")
+    first_name = models.CharField(max_length=30, verbose_name="Имя", null=True)
+    last_name = models.CharField(max_length=30, verbose_name="Фамилия", null=True)
     patronymic = models.CharField(max_length=30, blank=True, null=True, verbose_name="Отчество")
 
-    birthday = models.DateField(verbose_name="Дата рождения")
+    birthday = models.DateField(verbose_name="Дата рождения", null=True)
 
-    passport_series = models.CharField(max_length=10, verbose_name="Серия паспорта")
-    passport_number = models.CharField(max_length=15, verbose_name="Номер паспорта")
-    passport_issued = models.CharField(max_length=255, verbose_name="Кем выдан паспорт")
-    passport_issue_date = models.DateField(verbose_name="Дата выдачи паспорта")
+    passport_series = models.CharField(max_length=10, verbose_name="Серия паспорта", null=True)
+    passport_number = models.CharField(max_length=15, verbose_name="Номер паспорта", null=True)
+    passport_issued = models.CharField(max_length=255, verbose_name="Кем выдан паспорт", null=True)
+    passport_issue_date = models.DateField(verbose_name="Дата выдачи паспорта", null=True)
 
-    contract_date = models.DateField(verbose_name="Дата заключения контракта")
-    order_number = models.CharField(max_length=50, verbose_name="Номер приказа")
-    enrollment_date = models.DateField(verbose_name="Дата зачисления в добровольческое формирование")
+    contract_date = models.DateField(verbose_name="Дата заключения контракта", null=True)
+    order_number = models.CharField(max_length=50, verbose_name="Номер приказа", null=True)
+    enrollment_date = models.DateField(verbose_name="Дата зачисления в добровольческое формирование", null=True)
 
     salary_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Размер денежной выплаты",
-                                        default=0.00)
+                                        default=0.00, null=True, blank=True)
 
     bic = models.CharField(max_length=9, verbose_name="БИК", null=True, blank=True)
     bank_name = models.CharField(max_length=255, verbose_name="Наименование кредитной организации", null=True,
