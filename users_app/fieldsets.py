@@ -69,3 +69,16 @@ activity_report_failed_detail_fieldsets = (
     (None, {'fields': ('report_date', 'file', 'status')}),
     ('Ошибка', {'fields': ('error_details',)}),
 )
+
+update_report_create_fieldsets = (
+    (None, {'fields': ('file',)}),
+)
+
+update_report_detail_fieldsets = (
+    (None, {'fields': ('file', 'status')}),
+)
+
+update_report_failed_detail_fieldsets = (
+    (None, {'fields': ('file', 'status')}),
+    ('Ошибка', {'fields': ('error_details',)}),
+)
