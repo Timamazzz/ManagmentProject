@@ -22,7 +22,7 @@ class Volunteer(models.Model):
         ('dismissed', 'Уволен'),
         ('reserve', 'Резерв'),
     ]
-    number_service = models.CharField(max_length=256, verbose_name="Номер табельный")
+    number_service = models.CharField(max_length=256, verbose_name="Личный  номер")
 
     first_name = models.CharField(max_length=30, verbose_name="Имя", null=True)
     last_name = models.CharField(max_length=30, verbose_name="Фамилия", null=True)
@@ -208,7 +208,7 @@ class Report(models.Model):
         ws.title = "Отчет"
 
         headers = [
-            "id", "№ табельный", "Статус", "Фамилия", "Имя", "Отчество",
+            "id", "№ Личный", "Статус", "Фамилия", "Имя", "Отчество",
             "Дата рождения", "Серия паспорта", "Номер паспорта", "Кем выдан паспорт",
             "Дата выдачи паспорта", "Дата контракта", "№ приказа", "Дата зачисления",
             "Размер денежной выплаты", "БИК", "Банк", "Корр. счет", "Расчетный счет", "ИНН", "КПП",
@@ -450,4 +450,117 @@ class ActivityReport(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         if self.status == 'pending':  # Запускаем обработку только при создании
+            self.process_report()
+
+
+class UpdateReport(models.Model):
+    """Отчет обновления данных добровольцев"""
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает обработки'),
+        ('processing', 'В обработке'),
+        ('completed', 'Завершено'),
+        ('failed', 'Ошибка')
+    ]
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания отчета")
+    file = models.FileField(upload_to="update_reports/", verbose_name="Файл отчета")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус отчета")
+    error_details = models.TextField(verbose_name="Детали ошибки", blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Отчет обновления"
+        verbose_name_plural = "Отчеты обновления"
+
+    def __str__(self):
+        return f"Обновление данных ({self.created_at.strftime('%Y-%m-%d')})"
+
+    def clean(self):
+        if not self.file:
+            raise ValidationError({"file": _("Необходимо загрузить файл отчета.")})
+
+    def process_report(self):
+        print(f"\n--- Начало обработки отчета обновления данных ---")
+        self.error_details = ""  # Сбрасываем предыдущие ошибки
+        try:
+            with transaction.atomic():
+                print("[1/4] Загрузка файла Excel...")
+                wb = openpyxl.load_workbook(self.file, data_only=True)
+                ws = wb.active
+
+                print("[2/4] Чтение заголовков...")
+                header_row = [str(cell.value).strip().lower() for cell in ws[3]]
+                column_map = {
+                    'number_service': next((idx for idx, h in enumerate(header_row) if 'личный номер' in h), None),
+                    'last_name': next((idx for idx, h in enumerate(header_row) if 'фамилия' in h), None),
+                    'first_name': next((idx for idx, h in enumerate(header_row) if 'имя' in h), None),
+                    'patronymic': next((idx for idx, h in enumerate(header_row) if 'отчество' in h), None),
+                    'birthday': next((idx for idx, h in enumerate(header_row) if 'дата рождения' in h), None),
+                    'bic': next((idx for idx, h in enumerate(header_row) if 'бик' in h), None),
+                    'correspondent_account': next((idx for idx, h in enumerate(header_row) if 'номер счета' in h),
+                                                  None),
+                }
+
+                if None in column_map.values():
+                    self.error_details = "❌ Один или несколько обязательных столбцов не найдены!"
+                    self.status = 'failed'
+                    self.save(update_fields=['status', 'error_details'])
+                    raise ValueError(self.error_details)
+
+                print("✔️ Заголовки успешно считаны")
+
+                print("[3/4] Обновление данных волонтеров...")
+                updated_volunteers = []
+                errors = []
+
+                for row_num, row in enumerate(ws.iter_rows(min_row=4, values_only=True), start=4):
+                    number_service = row[column_map['number_service']]
+                    if not number_service:
+                        continue
+
+                    try:
+                        volunteer = Volunteer.objects.get(number_service=number_service)
+                        volunteer.last_name = row[column_map['last_name']]
+                        volunteer.first_name = row[column_map['first_name']]
+                        volunteer.patronymic = row[column_map['patronymic']]
+                        volunteer.birthday = row[column_map['birthday']]
+                        volunteer.bic = row[column_map['bic']]
+                        volunteer.correspondent_account = row[column_map['correspondent_account']]
+                        updated_volunteers.append(volunteer)
+                    except Volunteer.DoesNotExist:
+                        errors.append(f"Строка {row_num}: Волонтер с номером {number_service} не найден.")
+
+                if errors:
+                    self.error_details = "❌ Ошибки при обновлении волонтеров:\n" + "\n".join(errors)
+                    self.status = 'failed'
+                    self.save(update_fields=['status', 'error_details'])
+                    raise ValueError(self.error_details)
+
+                if updated_volunteers:
+                    Volunteer.objects.bulk_update(updated_volunteers,
+                                                  ['last_name', 'first_name', 'patronymic', 'birthday', 'bic',
+                                                   'correspondent_account'])
+                    print(f"✅ Обновлено волонтеров: {len(updated_volunteers)}")
+                else:
+                    print("🤷 Нет данных для обновления")
+
+                self.status = 'completed'
+                self.error_details = ""
+
+        except Exception as e:
+            print(f"🔥 Критическая ошибка: {str(e)}")
+            self.status = 'failed'
+            if not self.error_details:
+                self.error_details = str(e)
+        finally:
+            try:
+                with transaction.atomic():
+                    self.save(update_fields=['status', 'error_details'])
+            except Exception as e:
+                print(f"Ошибка при сохранении статуса: {e}")
+
+        print("--- Обработка отчета завершена ---\n")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.status == 'pending':
             self.process_report()
