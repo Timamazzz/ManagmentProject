@@ -12,7 +12,8 @@ default_fieldsets = (
         'fields': ('contract_date', 'order_number', 'enrollment_date'),
     }),
     ('Банковские реквизиты', {
-        'fields': ('salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
+        'fields': (
+            'salary', 'salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
     }),
     ('Увольнение', {
         'fields': ('status', 'dismissal_date', 'dismissal_order_number'),
@@ -34,7 +35,8 @@ reserve_fieldsets = (
         'fields': ('contract_date', 'order_number', 'enrollment_date'),
     }),
     ('Банковские реквизиты', {
-        'fields': ('salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
+        'fields': (
+            'salary', 'salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
     }),
 
 )
@@ -53,7 +55,8 @@ create_fieldsets = (
         'fields': ('contract_date', 'order_number', 'enrollment_date'),
     }),
     ('Банковские реквизиты', {
-        'fields': ('salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
+        'fields': (
+        'salary', 'salary_amount', 'bic', 'bank_name', 'correspondent_account', 'checking_account', 'inn', 'kpp'),
     }),
 )
 
