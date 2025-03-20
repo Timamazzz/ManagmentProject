@@ -61,7 +61,7 @@ class Volunteer(models.Model):
     rank = models.CharField(max_length=1024, verbose_name="Звание", blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active', verbose_name="Статус")
 
-    salary = models.PositiveIntegerField("Оклад", default=0)
+    salary = models.PositiveIntegerField("Оклад", default=0, null=True, blank=True)
 
     class Meta:
         verbose_name = "Доброволец"
