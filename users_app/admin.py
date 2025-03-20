@@ -4,7 +4,7 @@ from users_app.fieldsets import default_fieldsets, create_fieldsets, reserve_fie
     activity_report_create_fieldsets, activity_report_failed_detail_fieldsets, activity_report_detail_fieldsets, \
     update_report_detail_fieldsets, update_report_create_fieldsets, update_report_failed_detail_fieldsets
 from users_app.models import User, Volunteer, Remark, VolunteerItem, Item, Report, ActivityReport, UpdateReport, \
-    SalaryReport
+    SalaryReport, Combat
 from users_app.utils import export_to_excel, export_volunteers_and_items_to_excel
 
 
@@ -222,3 +222,11 @@ class SalaryReportAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Оставляем возможность удаления"""
         return True
+
+
+@admin.register(Combat)
+class CombatAdmin(admin.ModelAdmin):
+    list_display = ("volunteer", "date", "amount")
+    list_filter = ("date",)
+    search_fields = ("volunteer__last_name", "volunteer__first_name", "volunteer__number_service")
+    ordering = ("-date",)
