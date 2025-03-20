@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from users_app.fieldsets import default_fieldsets, create_fieldsets, reserve_fieldsets, \
     activity_report_create_fieldsets, activity_report_failed_detail_fieldsets, activity_report_detail_fieldsets, \
     update_report_detail_fieldsets, update_report_create_fieldsets, update_report_failed_detail_fieldsets
-from users_app.models import User, Volunteer, Remark, VolunteerItem, Item, Report, ActivityReport, UpdateReport
+from users_app.models import User, Volunteer, Remark, VolunteerItem, Item, Report, ActivityReport, UpdateReport, \
+    SalaryReport
 from users_app.utils import export_to_excel, export_volunteers_and_items_to_excel
 
 
@@ -204,3 +205,20 @@ class UpdateReportAdmin(admin.ModelAdmin):
             fieldsets = update_report_failed_detail_fieldsets
 
         return tuple(fieldsets)
+
+
+@admin.register(SalaryReport)
+class SalaryReportAdmin(admin.ModelAdmin):
+    list_display = ("start_date", "end_date", "created_at", "file")
+    readonly_fields = ("created_at", "file")
+    ordering = ("-created_at",)
+
+    def has_change_permission(self, request, obj=None):
+        """Отключаем возможность редактирования отчета после создания"""
+        if obj:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        """Оставляем возможность удаления"""
+        return True

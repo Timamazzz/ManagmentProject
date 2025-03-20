@@ -1,3 +1,4 @@
+import calendar
 from calendar import monthrange
 from datetime import date, datetime
 
@@ -9,6 +10,8 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django_jsonform.models.fields import JSONField
 from django.db import transaction
+
+from users_app.report_utils import get_volunteers_for_report, get_worked_days
 
 
 # Create your models here.
@@ -58,6 +61,8 @@ class Volunteer(models.Model):
     rank = models.CharField(max_length=1024, verbose_name="Звание", blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active', verbose_name="Статус")
 
+    salary = models.PositiveIntegerField("Оклад", default=0)
+
     class Meta:
         verbose_name = "Доброволец"
         verbose_name_plural = "Добровольцы"
@@ -87,6 +92,21 @@ class Volunteer(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class Combat(models.Model):
+    """Модель боевых выплат"""
+    volunteer = models.ForeignKey(Volunteer, on_delete=models.CASCADE, related_name="combat_payments",
+                                  verbose_name="Доброволец")
+    date = models.DateField(verbose_name="Дата")
+    amount = models.PositiveIntegerField(verbose_name="Сумма")
+
+    class Meta:
+        verbose_name = "Боевая выплата"
+        verbose_name_plural = "Боевые выплаты"
+
+    def __str__(self):
+        return f"Боевая выплата {self.volunteer.last_name} {self.volunteer.first_name} - {self.amount} руб. ({self.date})"
 
 
 class Remark(models.Model):
@@ -164,43 +184,6 @@ class Report(models.Model):
     def __str__(self):
         return f"Отчет с {self.start_date} по {self.end_date}"
 
-    def get_volunteers_for_report(self):
-        """Фильтрация добровольцев для отчета"""
-        start_date = self.start_date
-        end_date = self.end_date
-
-        # Исключаем уволенных до начала периода
-        queryset = Volunteer.objects.exclude(dismissal_date__isnull=False, dismissal_date__lte=start_date)
-        print(f"👥 Волонтеров после исключения уволенных до {start_date}: {queryset.count()}")
-
-        # Оставляем только тех, кто зачислен до конца периода
-        queryset = queryset.filter(enrollment_date__lte=end_date)
-        print(f"👥 Волонтеров после фильтрации по enrollment_date__lte={end_date}: {queryset.count()}")
-
-        # Исключаем волонтеров, у которых есть замечания в этот период
-        queryset = queryset.exclude(remarks__date__range=(start_date, end_date))
-        print(f"👥 Волонтеров после исключения по замечаниям в диапазоне ({start_date}, {end_date}): {queryset.count()}")
-
-        return queryset
-
-    def get_worked_days(self, volunteer):
-        """Вычисление количества отработанных дней"""
-        start_date = self.start_date
-        end_date = self.end_date
-
-        active_start = max(start_date, volunteer.enrollment_date)
-        active_end = min(end_date, volunteer.dismissal_date) if volunteer.dismissal_date else end_date
-
-        worked_days = (active_end - active_start).days + 1 if active_start <= active_end else 0
-
-        print(f"👤 Волонтер {volunteer.number_service}")
-        print(f"📅 Период отчета: {start_date} - {end_date}")
-        print(f"📅 Дата зачисления: {volunteer.enrollment_date}")
-        print(f"📅 Дата увольнения: {volunteer.dismissal_date or '❌ не уволен'}")
-        print(f"📆 Отработанные дни: {worked_days}")
-
-        return worked_days
-
     def generate_report(self):
         """Создание Excel-файла отчета"""
         wb = openpyxl.Workbook()
@@ -216,7 +199,8 @@ class Report(models.Model):
         ]
         ws.append(headers)
 
-        for volunteer in self.get_volunteers_for_report():
+        volunteers = get_volunteers_for_report(Volunteer.objects.all(), self.start_date, self.end_date)
+        for volunteer in volunteers:
             row = [
                 volunteer.id, volunteer.number_service, volunteer.get_status_display(),
                 volunteer.last_name, volunteer.first_name, volunteer.patronymic,
@@ -224,7 +208,7 @@ class Report(models.Model):
                 volunteer.passport_issue_date, volunteer.contract_date, volunteer.order_number,
                 volunteer.enrollment_date, volunteer.salary_amount, volunteer.bic, volunteer.bank_name,
                 volunteer.correspondent_account, volunteer.checking_account, volunteer.inn, volunteer.kpp,
-                self.get_worked_days(volunteer)
+                get_worked_days(volunteer, self.start_date, self.end_date)
             ]
             ws.append(row)
 
@@ -564,3 +548,74 @@ class UpdateReport(models.Model):
         super().save(*args, **kwargs)
         if self.status == 'pending':
             self.process_report()
+
+
+class SalaryReport(models.Model):
+    """Отчет о зарплате волонтеров за период"""
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания отчета")
+    start_date = models.DateField(verbose_name="Дата начала периода")
+    end_date = models.DateField(verbose_name="Дата окончания периода")
+    file = models.FileField(upload_to="salary_reports/", blank=True, null=True, verbose_name="Файл отчета")
+
+    class Meta:
+        verbose_name = "Расчетный лист"
+        verbose_name_plural = "Расчетные листы"
+
+    def __str__(self):
+        return f"Расчетный лист с {self.start_date} по {self.end_date}"
+
+    def clean(self):
+        """Валидация дат"""
+        if self.start_date >= self.end_date:
+            raise ValidationError({"end_date": "Дата окончания должна быть позже даты начала."})
+
+    def generate_report(self):
+        """Генерация Excel-файла с расчетным листом"""
+
+        volunteers = get_volunteers_for_report(Volunteer.objects.all(), self.start_date, self.end_date)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Расчетный лист"
+
+        headers = ["ФИО", "Личный номер", "Должность", "Оклад", "Боевые", "Губернаторские выплаты", "Итого"]
+        ws.append(headers)
+
+        # Вычисляем количество месяцев в периоде
+        num_months = (self.end_date.year - self.start_date.year) * 12 + self.end_date.month - self.start_date.month + 1
+
+        for volunteer in volunteers:
+            full_name = f"{volunteer.last_name} {volunteer.first_name} {volunteer.patronymic or ''}".strip()
+            rank = volunteer.rank or "—"
+            salary = volunteer.salary * num_months  # Оклад за период
+
+            # Считаем боевые выплаты за период
+            combat_total = Combat.objects.filter(
+                volunteer=volunteer,
+                date__range=(self.start_date, self.end_date)
+            ).aggregate(total=models.Sum("amount"))["total"] or 0
+
+            # Считаем губернаторские выплаты
+            worked_days = get_worked_days(volunteer, self.start_date, self.end_date)
+            governor_payments = worked_days * 1457
+
+            # Итоговая сумма
+            total_amount = salary + combat_total + governor_payments
+
+            # Добавляем строку в Excel
+            ws.append(
+                [full_name, volunteer.number_service, rank, salary, combat_total, governor_payments, total_amount])
+
+        # Сохраняем файл в `self.file`
+        file_stream = ContentFile(b"")
+        wb.save(file_stream)
+        file_stream.seek(0)
+        filename = f"salary_report_{self.start_date}_{self.end_date}.xlsx"
+        self.file.save(filename, file_stream, save=False)
+
+    def save(self, *args, **kwargs):
+        """Перед сохранением создаем отчет"""
+        self.full_clean()
+        super().save(*args, **kwargs)
+        self.generate_report()
+        super().save(update_fields=["file"])
