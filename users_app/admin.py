@@ -36,6 +36,14 @@ class VolunteerItemInline(admin.TabularInline):
         return obj and obj.status == 'active' if obj else False
 
 
+class CombatInline(admin.TabularInline):
+    model = Combat
+    extra = 0
+    ordering = ("-date",)
+    fields = ("date", "amount")
+    show_change_link = True
+
+
 @admin.register(User)
 class MyUserAdmin(UserAdmin):
     pass
@@ -212,6 +220,7 @@ class SalaryReportAdmin(admin.ModelAdmin):
     list_display = ("start_date", "end_date", "created_at", "file")
     readonly_fields = ("created_at", "file")
     ordering = ("-created_at",)
+    inlines = [CombatInline]
 
     def has_change_permission(self, request, obj=None):
         """Отключаем возможность редактирования отчета после создания"""
