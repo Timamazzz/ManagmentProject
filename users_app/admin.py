@@ -76,7 +76,7 @@ class VolunteerAdmin(admin.ModelAdmin):
     )
     list_filter = ("status", "contract_date", "enrollment_date", "dismissal_date")
     search_fields = ("last_name", "first_name", "patronymic", "number_service")
-    inlines = (RemarkInline, VolunteerItemInline)
+    inlines = (RemarkInline, VolunteerItemInline, CombatInline)
     fieldsets = default_fieldsets
 
     def get_inline_instances(self, request, obj=None):
@@ -220,7 +220,6 @@ class SalaryReportAdmin(admin.ModelAdmin):
     list_display = ("start_date", "end_date", "created_at", "file")
     readonly_fields = ("created_at", "file")
     ordering = ("-created_at",)
-    inlines = [CombatInline]
 
     def has_change_permission(self, request, obj=None):
         """Отключаем возможность редактирования отчета после создания"""
